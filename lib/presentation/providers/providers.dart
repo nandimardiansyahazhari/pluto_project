@@ -1,7 +1,5 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fpdart/fpdart.dart';
-import '../../core/failures.dart';
 import '../../data/datasources/digiflazz_remote_datasource.dart';
 import '../../data/repositories/top_up_repository_impl.dart';
 import '../../domain/entities/product.dart';
@@ -18,7 +16,9 @@ final remoteDataSourceProvider = Provider<DigiflazzRemoteDataSource>((ref) {
 
 // Repository
 final topUpRepositoryProvider = Provider<TopUpRepository>((ref) {
-  return TopUpRepositoryImpl(remoteDataSource: ref.read(remoteDataSourceProvider));
+  return TopUpRepositoryImpl(
+    remoteDataSource: ref.read(remoteDataSourceProvider),
+  );
 });
 
 // Use Cases
@@ -30,8 +30,5 @@ final getProductsProvider = Provider<GetProducts>((ref) {
 final productListProvider = FutureProvider<List<Product>>((ref) async {
   final getProducts = ref.read(getProductsProvider);
   final result = await getProducts();
-  return result.fold(
-    (failure) => throw failure,
-    (products) => products,
-  );
+  return result.fold((failure) => throw failure, (products) => products);
 });

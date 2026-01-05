@@ -5,6 +5,8 @@ import 'core/theme.dart';
 import 'presentation/pages/home_page.dart';
 import 'presentation/pages/login_page.dart';
 import 'presentation/pages/dashboard_page.dart';
+import 'presentation/pages/payment_page.dart';
+import 'domain/entities/product.dart';
 
 void main() {
   runApp(const ProviderScope(child: MyApp()));
@@ -18,6 +20,13 @@ final _router = GoRouter(
     GoRoute(
       path: '/dashboard',
       builder: (context, state) => const DashboardPage(),
+    ),
+    GoRoute(
+      path: '/payment',
+      builder: (context, state) {
+        final product = state.extra as Product;
+        return PaymentPage(product: product);
+      },
     ),
   ],
 );

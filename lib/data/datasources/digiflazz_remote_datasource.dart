@@ -1,11 +1,14 @@
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../../core/failures.dart';
 import '../models/product_model.dart';
 
 abstract class DigiflazzRemoteDataSource {
   Future<List<ProductModel>> getProducts();
-  Future<bool> purchaseCredit(String buyerSkuCode, String customerNo, String refId);
+  Future<bool> purchaseCredit(
+    String buyerSkuCode,
+    String customerNo,
+    String refId,
+  );
 }
 
 class DigiflazzRemoteDataSourceImpl implements DigiflazzRemoteDataSource {
@@ -54,7 +57,7 @@ class DigiflazzRemoteDataSourceImpl implements DigiflazzRemoteDataSource {
           endCutOff: "23:59",
           desc: "50 Diamonds direct topup",
         ),
-         const ProductModel(
+        const ProductModel(
           productName: "Free Fire 100 Diamonds",
           category: "Games",
           brand: "Free Fire",
@@ -71,6 +74,40 @@ class DigiflazzRemoteDataSourceImpl implements DigiflazzRemoteDataSource {
           endCutOff: "23:59",
           desc: "100 Diamonds",
         ),
+        const ProductModel(
+          productName: "PUBG Mobile 60 UC",
+          category: "Games",
+          brand: "PUBG Mobile",
+          type: "Game Direct",
+          sellerName: "Digiflazz",
+          price: 15000,
+          buyerSkuCode: "pubg60",
+          buyerProductStatus: true,
+          sellerProductStatus: true,
+          unlimitedStock: true,
+          stock: 999,
+          multi: true,
+          startCutOff: "00:00",
+          endCutOff: "23:59",
+          desc: "60 UC Global",
+        ),
+        const ProductModel(
+          productName: "PUBG Mobile 325 UC",
+          category: "Games",
+          brand: "PUBG Mobile",
+          type: "Game Direct",
+          sellerName: "Digiflazz",
+          price: 75000,
+          buyerSkuCode: "pubg325",
+          buyerProductStatus: true,
+          sellerProductStatus: true,
+          unlimitedStock: true,
+          stock: 999,
+          multi: true,
+          startCutOff: "00:00",
+          endCutOff: "23:59",
+          desc: "325 UC Global",
+        ),
       ];
     } else {
       // Real API implementation
@@ -81,8 +118,12 @@ class DigiflazzRemoteDataSourceImpl implements DigiflazzRemoteDataSource {
   }
 
   @override
-  Future<bool> purchaseCredit(String buyerSkuCode, String customerNo, String refId) async {
-      await Future.delayed(const Duration(seconds: 2));
-      return true; // Mock success
+  Future<bool> purchaseCredit(
+    String buyerSkuCode,
+    String customerNo,
+    String refId,
+  ) async {
+    await Future.delayed(const Duration(seconds: 2));
+    return true; // Mock success
   }
 }
