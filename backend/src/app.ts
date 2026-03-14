@@ -3,6 +3,7 @@ import fastifyJwt from '@fastify/jwt';
 import cors from '@fastify/cors';
 import { PrismaClient } from '@prisma/client';
 import { authRoutes } from './routes/auth';
+import { gameRoutes } from './routes/game';
 
 const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
@@ -28,6 +29,7 @@ app.decorate("authenticate", async function (request: any, reply: any) {
 
 // Register Routes
 app.register(authRoutes, { prefix: '/api/auth' });
+app.register(gameRoutes, { prefix: '/api/game' });
 
 // Root Route
 app.get('/', async () => {

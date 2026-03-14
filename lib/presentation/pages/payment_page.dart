@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:dio/dio.dart';
 import '../../domain/entities/product.dart';
 import '../providers/payment_provider.dart';
+import '../providers/auth_provider.dart';
 
 class PaymentPage extends ConsumerStatefulWidget {
   final Product product;
@@ -15,6 +17,16 @@ class PaymentPage extends ConsumerStatefulWidget {
 }
 
 class _PaymentPageState extends ConsumerState<PaymentPage> {
+  final _mlUserIdController = TextEditingController();
+  final _mlZoneIdController = TextEditingController();
+  bool _isCheckingNickname = false;
+  String? _detectedNickname;
+  String? _lookupError;
+  final Dio _dio = Dio();
+
+  bool get _requiresMlAccount =>
+      widget.product.brand.toLowerCase() == 'mobile legends';
+
   @override
   void initState() {
     super.initState();
@@ -24,10 +36,119 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
     });
   }
 
+  @override
+  void dispose() {
+    _mlUserIdController.dispose();
+    _mlZoneIdController.dispose();
+    super.dispose();
+  }
+
   String _formatDuration(int seconds) {
     final minutes = seconds ~/ 60;
     final remainingSeconds = seconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _lookupMlNickname() async {
+    final userId = _mlUserIdController.text.trim();
+    final zoneId = _mlZoneIdController.text.trim();
+
+    if (userId.isEmpty || zoneId.isEmpty) {
+      setState(() {
+        _lookupError = 'User ID dan Zone ID wajib diisi.';
+        _detectedNickname = null;
+      });
+      return;
+    }
+
+    if (!RegExp(r'^\d+$').hasMatch(userId) ||
+        !RegExp(r'^\d+$').hasMatch(zoneId)) {
+      setState(() {
+        _lookupError = 'User ID dan Zone ID harus berupa angka.';
+        _detectedNickname = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isCheckingNickname = true;
+      _lookupError = null;
+      _detectedNickname = null;
+    });
+
+    try {
+      final response = await _dio.post(
+        'http://localhost:3000/api/game/mobile-legends/lookup',
+        data: {
+          'userId': userId,
+          'zoneId': zoneId,
+        },
+      );
+
+      final data = response.data;
+      final nickname = data is Map<String, dynamic>
+          ? data['nickname'] as String?
+          : null;
+
+      if (!mounted) return;
+      setState(() {
+        _isCheckingNickname = false;
+        if (nickname == null || nickname.isEmpty) {
+          _lookupError = 'Akun tidak ditemukan.';
+          _detectedNickname = null;
+        } else {
+          _detectedNickname = nickname;
+          _lookupError = null;
+        }
+      });
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final serverError = e.response?.data is Map<String, dynamic>
+          ? (e.response?.data['error'] as String?)
+          : null;
+
+      setState(() {
+        _isCheckingNickname = false;
+        _detectedNickname = null;
+        _lookupError = serverError ?? 'Gagal cek akun. Pastikan backend aktif.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isCheckingNickname = false;
+        _detectedNickname = null;
+        _lookupError = 'Terjadi kesalahan saat cek akun.';
+      });
+    }
+  }
+
+  bool _validateBeforePay() {
+    if (!_requiresMlAccount) return true;
+
+    final userId = _mlUserIdController.text.trim();
+    final zoneId = _mlZoneIdController.text.trim();
+    final isUserNumeric = RegExp(r'^\d+$').hasMatch(userId);
+    final isZoneNumeric = RegExp(r'^\d+$').hasMatch(zoneId);
+
+    if (userId.isEmpty || zoneId.isEmpty || !isUserNumeric || !isZoneNumeric) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Isi User ID & Zone ID Mobile Legends dengan benar.'),
+        ),
+      );
+      return false;
+    }
+
+    if (_detectedNickname == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cek nickname dulu sebelum lanjut pembayaran.'),
+        ),
+      );
+      return false;
+    }
+
+    return true;
   }
 
   @override
@@ -60,9 +181,9 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
               TextButton(
                 onPressed: () {
                   Navigator.of(dialogContext).pop(); // Close dialog
-                  // Use the outer context (PaymentPage's context) to navigate
                   if (context.mounted) {
-                    context.go('/dashboard');
+                    final isLoggedIn = ref.read(authProvider).isAuthenticated;
+                    context.go(isLoggedIn ? '/dashboard' : '/');
                   }
                 },
                 child: const Text("OK"),
@@ -94,6 +215,99 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                 ),
                 child: Column(
                   children: [
+                    if (_requiresMlAccount) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Data Akun Mobile Legends',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _mlUserIdController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'User ID',
+                          hintText: 'Contoh: 12345678',
+                        ),
+                        onChanged: (_) {
+                          setState(() {
+                            _detectedNickname = null;
+                            _lookupError = null;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _mlZoneIdController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Zone ID',
+                          hintText: 'Contoh: 1234',
+                        ),
+                        onChanged: (_) {
+                          setState(() {
+                            _detectedNickname = null;
+                            _lookupError = null;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _isCheckingNickname
+                              ? null
+                              : _lookupMlNickname,
+                          icon: _isCheckingNickname
+                              ? const SizedBox(
+                                  height: 16,
+                                  width: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.search),
+                          label: Text(
+                            _isCheckingNickname
+                                ? 'Mengecek akun...'
+                                : 'Cek User ID & Zone ID',
+                          ),
+                        ),
+                      ),
+                      if (_detectedNickname != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.verified_user,
+                              color: Colors.green,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Atas nama: $_detectedNickname',
+                                style: const TextStyle(color: Colors.green),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (_lookupError != null) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _lookupError!,
+                            style: const TextStyle(color: Colors.redAccent),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                    ],
                     Text(
                       "Scan QRIS to Pay",
                       style: Theme.of(context).textTheme.headlineSmall
@@ -170,6 +384,7 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                       height: 50,
                       child: OutlinedButton(
                         onPressed: () {
+                          if (!_validateBeforePay()) return;
                           ref.read(paymentProvider.notifier).simulateSuccess();
                         },
                         style: OutlinedButton.styleFrom(

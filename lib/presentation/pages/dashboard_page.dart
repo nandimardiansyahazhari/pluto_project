@@ -12,8 +12,10 @@ class DashboardPage extends ConsumerWidget {
     final user = authState.user;
 
     if (user == null) {
-      // Basic protection, though Router redirect is better
-      return const Scaffold(body: Center(child: Text("Unauthorized")));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) context.go('/login');
+      });
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
