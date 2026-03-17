@@ -51,6 +51,11 @@ class PaymentNotifier extends Notifier<PaymentState> {
     _startTimer();
   }
 
+  void reset() {
+    _timer?.cancel();
+    state = const PaymentState();
+  }
+
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -61,18 +66,15 @@ class PaymentNotifier extends Notifier<PaymentState> {
         _timer?.cancel();
       }
     });
-
-    // Simulate auto-success after 5 seconds
-    Future.delayed(const Duration(seconds: 5), () {
-      if (state.status == PaymentStatus.pending) {
-        state = state.copyWith(status: PaymentStatus.success);
-        _timer?.cancel();
-      }
-    });
   }
 
   void simulateSuccess() {
     state = state.copyWith(status: PaymentStatus.success);
+    _timer?.cancel();
+  }
+
+  void markFailed() {
+    state = state.copyWith(status: PaymentStatus.failed);
     _timer?.cancel();
   }
 }

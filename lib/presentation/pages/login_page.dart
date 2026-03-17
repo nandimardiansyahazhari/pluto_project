@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 import '../providers/auth_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -13,6 +14,8 @@ class LoginPage extends ConsumerStatefulWidget {
 class _LoginPageState extends ConsumerState<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final Dio _dio = Dio();
+  bool _isSeedingDemo = false;
 
   @override
   void dispose() {
@@ -84,6 +87,81 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Demo Accounts",
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text("1) demo1@pluto.local / demo123"),
+                    const Text("2) demo2@pluto.local / demo123"),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _isSeedingDemo
+                            ? null
+                            : () async {
+                                setState(() {
+                                  _isSeedingDemo = true;
+                                });
+
+                                try {
+                                  await _dio.post(
+                                    'http://localhost:3000/api/auth/seed-demo',
+                                  );
+
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Demo accounts are ready. You can login now.',
+                                      ),
+                                    ),
+                                  );
+                                } on DioException catch (e) {
+                                  if (!context.mounted) return;
+                                  final err = e.response?.data is Map<String, dynamic>
+                                      ? (e.response?.data['error'] as String?)
+                                      : null;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        err ?? 'Failed to seed demo accounts',
+                                      ),
+                                    ),
+                                  );
+                                } finally {
+                                  if (!mounted) return;
+                                  setState(() {
+                                    _isSeedingDemo = false;
+                                  });
+                                }
+                              },
+                        child: _isSeedingDemo
+                            ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Create / Refresh Demo Accounts'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
               TextField(
                 controller: _emailController,
                 decoration: InputDecoration(

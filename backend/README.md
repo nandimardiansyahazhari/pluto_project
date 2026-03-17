@@ -15,10 +15,17 @@
    ```
 3. **Run Migrations**:
    ```bash
-   npx prisma generate
-   npx prisma migrate dev --name init
+   npm run db:generate
+   npm run db:migrate -- --name init
    ```
 4. **Start Server**:
    ```bash
-   npm start
+   npm run dev
    ```
+
+## Scripts
+
+- `npm run dev`: start server with watch mode (auto-restart on file change)
+- `npm start`: start server once (no watch)
+- `npm run db:generate`: generate Prisma client
+- `npm run db:migrate -- --name <migration_name>`: run Prisma migration

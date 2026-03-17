@@ -4,6 +4,8 @@ import cors from '@fastify/cors';
 import { PrismaClient } from '@prisma/client';
 import { authRoutes } from './routes/auth';
 import { gameRoutes } from './routes/game';
+import { paymentRoutes } from './routes/payment';
+import { transactionRoutes } from './routes/transaction';
 
 const prisma = new PrismaClient();
 const app = Fastify({ logger: true });
@@ -30,6 +32,8 @@ app.decorate("authenticate", async function (request: any, reply: any) {
 // Register Routes
 app.register(authRoutes, { prefix: '/api/auth' });
 app.register(gameRoutes, { prefix: '/api/game' });
+app.register(paymentRoutes, { prefix: '/api/payment' });
+app.register(transactionRoutes, { prefix: '/api/transactions' });
 
 // Root Route
 app.get('/', async () => {

@@ -20,6 +20,7 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
   final _mlUserIdController = TextEditingController();
   final _mlZoneIdController = TextEditingController();
   bool _isCheckingNickname = false;
+  bool _isVerifyingPayment = false;
   String? _detectedNickname;
   String? _lookupError;
   final Dio _dio = Dio();
@@ -27,13 +28,12 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
   bool get _requiresMlAccount =>
       widget.product.brand.toLowerCase() == 'mobile legends';
 
-  @override
-  void initState() {
-    super.initState();
-    // Generate QR when page opens
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(paymentProvider.notifier).generateQR(widget.product.price);
-    });
+  String? get _customerNo {
+    if (!_requiresMlAccount) return null;
+    final userId = _mlUserIdController.text.trim();
+    final zoneId = _mlZoneIdController.text.trim();
+    if (userId.isEmpty || zoneId.isEmpty) return null;
+    return '$userId$zoneId';
   }
 
   @override
@@ -151,9 +151,87 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
     return true;
   }
 
+  void _resetPaymentDraft() {
+    ref.read(paymentProvider.notifier).reset();
+    setState(() {
+      _detectedNickname = null;
+      _lookupError = null;
+      _isVerifyingPayment = false;
+    });
+  }
+
+  void _generatePaymentQr() {
+    if (!_validateBeforePay()) return;
+    ref.read(paymentProvider.notifier).generateQR(widget.product.price);
+  }
+
+  Future<void> _verifyPayment() async {
+    final paymentNotifier = ref.read(paymentProvider.notifier);
+
+    setState(() {
+      _isVerifyingPayment = true;
+    });
+
+    try {
+      final response = await _dio.post(
+        'http://localhost:3000/api/payment/verify',
+        data: {
+          'buyerSkuCode': widget.product.buyerSkuCode,
+          'amount': widget.product.price,
+          'customerNo': _customerNo,
+        },
+      );
+
+      final data = response.data;
+      final isSuccess = data is Map<String, dynamic>
+          ? data['success'] == true
+          : false;
+
+      if (!mounted) return;
+
+      if (isSuccess) {
+        paymentNotifier.simulateSuccess();
+      } else {
+        paymentNotifier.markFailed();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pembayaran belum terverifikasi.'),
+          ),
+        );
+      }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      paymentNotifier.markFailed();
+      final serverError = e.response?.data is Map<String, dynamic>
+          ? (e.response?.data['error'] as String?)
+          : null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            serverError ?? 'Gagal memverifikasi pembayaran. Pastikan backend aktif.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      paymentNotifier.markFailed();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Terjadi kesalahan saat verifikasi pembayaran.'),
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isVerifyingPayment = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final paymentState = ref.watch(paymentProvider);
+    final hasGeneratedQr = paymentState.qrData.isNotEmpty;
 
     ref.listen<PaymentState>(paymentProvider, (previous, next) {
       if (next.status == PaymentStatus.success) {
@@ -233,10 +311,7 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                           hintText: 'Contoh: 12345678',
                         ),
                         onChanged: (_) {
-                          setState(() {
-                            _detectedNickname = null;
-                            _lookupError = null;
-                          });
+                          _resetPaymentDraft();
                         },
                       ),
                       const SizedBox(height: 12),
@@ -248,10 +323,7 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                           hintText: 'Contoh: 1234',
                         ),
                         onChanged: (_) {
-                          setState(() {
-                            _detectedNickname = null;
-                            _lookupError = null;
-                          });
+                          _resetPaymentDraft();
                         },
                       ),
                       const SizedBox(height: 12),
@@ -329,7 +401,13 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                           : const SizedBox(
                               height: 200,
                               width: 200,
-                              child: Center(child: CircularProgressIndicator()),
+                              child: Center(
+                                child: Text(
+                                  'Lengkapi data lalu buat QR pembayaran',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.black54),
+                                ),
+                              ),
                             ),
                     ),
                     const SizedBox(height: 24),
@@ -382,19 +460,41 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                     SizedBox(
                       width: double.infinity,
                       height: 50,
-                      child: OutlinedButton(
-                        onPressed: () {
-                          if (!_validateBeforePay()) return;
-                          ref.read(paymentProvider.notifier).simulateSuccess();
-                        },
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        child: const Text("Simulate Success (Test Mode)"),
+                      child: FilledButton(
+                        onPressed: hasGeneratedQr ? null : _generatePaymentQr,
+                        child: const Text('Buat QR Pembayaran'),
                       ),
                     ),
+                    if (hasGeneratedQr) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: OutlinedButton(
+                          onPressed: _isVerifyingPayment ? null : _verifyPayment,
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          child: _isVerifyingPayment
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text('Saya Sudah Bayar, Verifikasi'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Demo mode: verifikasi pembayaran masih memakai backend mock.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
