@@ -167,6 +167,17 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
 
   Future<void> _verifyPayment() async {
     final paymentNotifier = ref.read(paymentProvider.notifier);
+    final token = ref.read(authProvider).token;
+
+    if (token == null || token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please login first to verify payment.'),
+        ),
+      );
+      context.go('/login');
+      return;
+    }
 
     setState(() {
       _isVerifyingPayment = true;
@@ -180,6 +191,11 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
           'amount': widget.product.price,
           'customerNo': _customerNo,
         },
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        ),
       );
 
       final data = response.data;
@@ -230,8 +246,58 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final user = authState.user;
     final paymentState = ref.watch(paymentProvider);
     final hasGeneratedQr = paymentState.qrData.isNotEmpty;
+
+    if (user == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Payment')),
+        body: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 420),
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardTheme.color,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'You cannot continue transaction as guest.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Please go back to Home and login first.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => context.go('/'),
+                    icon: const Icon(Icons.home_outlined),
+                    label: const Text('Back to Home'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     ref.listen<PaymentState>(paymentProvider, (previous, next) {
       if (next.status == PaymentStatus.success) {

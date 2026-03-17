@@ -31,7 +31,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     // Listen for successful login to redirect
     ref.listen(authProvider, (previous, next) {
       if (next.isAuthenticated) {
-        context.go('/dashboard');
+        context.go('/');
       } else if (next.error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

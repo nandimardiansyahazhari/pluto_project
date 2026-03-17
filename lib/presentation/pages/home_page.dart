@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import '../providers/auth_provider.dart';
 import '../providers/providers.dart';
 import '../widgets/product_card.dart';
 import '../widgets/banner_carousel.dart';
@@ -25,6 +26,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   Widget build(BuildContext context) {
     final productsAsyncValue = ref.watch(productListProvider);
+    final authState = ref.watch(authProvider);
+    final isLoggedIn = authState.isAuthenticated;
 
     return Scaffold(
       appBar: AppBar(
@@ -34,9 +37,9 @@ class _HomePageState extends ConsumerState<HomePage> {
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: FilledButton.icon(
-              onPressed: () => context.go('/login'),
-              icon: const Icon(Icons.login),
-              label: const Text("Login"),
+              onPressed: () => context.go(isLoggedIn ? '/dashboard' : '/login'),
+              icon: Icon(isLoggedIn ? Icons.person : Icons.login),
+              label: Text(isLoggedIn ? 'Account' : 'Login'),
               style: FilledButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Colors.white,
@@ -144,6 +147,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                         return ProductCard(
                               product: product,
                               onTap: () {
+                                if (!isLoggedIn) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'You cannot continue transaction. Please login first from Home page.',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
                                 context.push('/payment', extra: product);
                               },
                             )
@@ -171,6 +184,41 @@ class _HomePageState extends ConsumerState<HomePage> {
                 child: const Text("Retry"),
               ),
             ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: BottomAppBar(
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 64,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                IconButton(
+                  onPressed: () => context.go('/'),
+                  icon: const Icon(Icons.home),
+                  tooltip: 'Home',
+                ),
+                IconButton(
+                  onPressed: () {
+                    if (!isLoggedIn) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'You cannot open transaction report as guest. Please login first from Home page.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+                    context.go('/dashboard');
+                  },
+                  icon: const Icon(Icons.receipt_long),
+                  tooltip: 'Transactions',
+                ),
+              ],
+            ),
           ),
         ),
       ),

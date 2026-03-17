@@ -1,4 +1,7 @@
 import { FastifyInstance } from 'fastify';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 type VerifyPaymentBody = {
     buyerSkuCode?: string;
@@ -11,8 +14,15 @@ function buildReferenceId(): string {
 }
 
 export async function paymentRoutes(app: FastifyInstance) {
-    app.post('/verify', async (request, reply) => {
+    app.post('/verify', {
+        onRequest: [(app as any).authenticate],
+    }, async (request, reply) => {
         const { buyerSkuCode, amount, customerNo } = request.body as VerifyPaymentBody;
+        const userId = (request.user as any)?.id as string | undefined;
+
+        if (!userId) {
+            return reply.code(401).send({ error: 'Unauthorized' });
+        }
 
         if (!buyerSkuCode || !amount) {
             return reply.code(400).send({
@@ -28,13 +38,37 @@ export async function paymentRoutes(app: FastifyInstance) {
 
         await new Promise((resolve) => setTimeout(resolve, 800));
 
+        const wallet = await prisma.wallet.findUnique({
+            where: { userId },
+        });
+
+        if (!wallet) {
+            return reply.code(404).send({
+                error: 'Wallet not found for this user',
+            });
+        }
+
+        const referenceId = buildReferenceId();
+
+        const createdTransaction = await prisma.transaction.create({
+            data: {
+                walletId: wallet.id,
+                type: 'TOPUP',
+                amount,
+                status: 'DONE',
+                description: `Top up ${buyerSkuCode}`,
+                referenceId,
+            },
+        });
+
         return reply.send({
             success: true,
             status: 'PAID',
             buyerSkuCode,
             amount,
             customerNo: customerNo ?? null,
-            referenceId: buildReferenceId(),
+            referenceId,
+            transactionId: createdTransaction.id,
             source: 'mock',
             message: 'Payment verified successfully',
         });
